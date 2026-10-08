@@ -45,7 +45,8 @@ static void do_throw(LONG code, APTR info, APTR from)
 	estringf((STRPTR)buf, sizeof(buf),
 	         (CONST_STRPTR)"exception 0x\\h[8] info 0x\\h[8] from 0x\\h[8] (Raise at 0x\\h[8])",
 	         code, (LONG)info, (LONG)from, (LONG)Raise);
-	e_trace((CONST_STRPTR)buf);
+	if (from)                               /* not for ReThrow() */
+		e_trace((CONST_STRPTR)buf);
 #else
 	(void)from;
 #endif
@@ -69,7 +70,7 @@ void Raise(LONG code)
 void ReThrow(void)
 {
 	if (exception)
-		Throw(exception, exceptioninfo);
+		do_throw(exception, exceptioninfo, 0);
 }
 
 /* ------------------------------------------------------------------ memory */
