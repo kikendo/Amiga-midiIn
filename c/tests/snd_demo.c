@@ -15,6 +15,9 @@
  *   2. one tone sliding up an octave over 2 s and back down over 2 s
  *   3. AHI and Paula 14-bit only: eight voices at once, a wide chord across
  *      the stereo field, fading out over 2 s
+ *   4. AHI and Paula 14-bit only, pan test: one tone on the left only, then
+ *      on the right only (1 s each), then moving from right to left over
+ *      2 s. The program prints each step as it plays it.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -124,6 +127,24 @@ int main(int argc, char **argv)
 		for (i = 0; i < 8; i++)
 			snd_release(i, 20);
 		Delay(120);
+	}
+	/* 4: pan test, mixing engines only */
+	if (snd_voices() >= 8) {
+		LONG t;
+
+		printf("left only\n");
+		snd_playsample(0, id, 0, (LONG)(440 * CYCLE), 65536 / 2, 65536, 0, 0);
+		Delay(50);
+		printf("right only\n");
+		snd_setvolume(0, 65536 / 2, 0);
+		Delay(50);
+		printf("moving right to left\n");
+		for (t = 0; t <= 100; t++) {
+			snd_setvolume(0, 65536 / 2, (ULONG)(t * 65536 / 100));
+			Delay(1);
+		}
+		snd_release(0, 3);
+		Delay(25);
 	}
 	say_free("end");
 
