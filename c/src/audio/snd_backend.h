@@ -2,8 +2,8 @@
  * snd_backend.h - what an audio engine provides to snd.c
  *
  * Units are the same for every engine: frequencies in Hz (negative =
- * backwards, if the engine can), volume 65536 = 100%, pan 0 = left ..
- * 65536 = right, sample data 16-bit signed, sample ids 1-based, channel
+ * backwards, if the engine can), volume 65536 = 100%, pan 0 = right ..
+ * 65536 = left, sample data 16-bit signed, sample ids 1-based, channel
  * masks with bit n = channel n.
  */
 #ifndef SND_BACKEND_H
@@ -43,5 +43,6 @@ struct snd_backend {
 
 extern const struct snd_backend snd_backend_ahi;
 extern const struct snd_backend snd_backend_paula4;
+extern const struct snd_backend snd_backend_paula14;
 
 #endif /* SND_BACKEND_H */

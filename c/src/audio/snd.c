@@ -112,10 +112,13 @@ BOOL snd_init(enum snd_engine engine, UWORD maxsamples)
 	switch (engine) {
 	case SND_AHI:
 		return try_engine(&snd_backend_ahi, maxsamples);
+	case SND_PAULA14:
+		return try_engine(&snd_backend_paula14, maxsamples);
 	case SND_PAULA4:
 		return try_engine(&snd_backend_paula4, maxsamples);
 	default:
 		return try_engine(&snd_backend_ahi, maxsamples)
+		    || try_engine(&snd_backend_paula14, maxsamples)
 		    || try_engine(&snd_backend_paula4, maxsamples);
 	}
 }

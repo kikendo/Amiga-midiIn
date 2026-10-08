@@ -1,18 +1,20 @@
 /*
  * snd_demo.c - listening test for the engine-independent snd_* layer.
  *
- *   snd_demo          AHI if it works, otherwise Paula 4 channel
- *   snd_demo ahi      AHI only (68020+, ahi.device)
+ *   snd_demo          AHI if it works, else Paula 14-bit on a 68020+,
+ *                     else Paula 4 channel
+ *   snd_demo ahi      AHI only (68020+, a working AHI mode)
+ *   snd_demo paula14  Paula 14-bit only (68020+)
  *   snd_demo paula    Paula 4 channel only
  *
  * What you should hear:
  *   1. an A major chord, four voices, fading in over about 0.3 s, settling a
- *      little quieter, held, then fading out over 1 s. With AHI the voices
- *      are spread across the stereo field; with Paula, voices 0 and 3 are
- *      left and 1 and 2 right.
+ *      little quieter, held, then fading out over 1 s. With AHI and Paula
+ *      14-bit the voices are spread across the stereo field; with Paula 4
+ *      channel, voices 0 and 3 are left and 1 and 2 right.
  *   2. one tone sliding up an octave over 2 s and back down over 2 s
- *   3. AHI only: eight voices at once (more than Paula can play), a wide
- *      chord across the stereo field, fading out over 2 s
+ *   3. AHI and Paula 14-bit only: eight voices at once, a wide chord across
+ *      the stereo field, fading out over 2 s
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -58,6 +60,8 @@ int main(int argc, char **argv)
 	if (argc > 1) {
 		if (!strcmp(argv[1], "ahi"))
 			engine = SND_AHI;
+		else if (!strcmp(argv[1], "paula14"))
+			engine = SND_PAULA14;
 		else if (!strcmp(argv[1], "paula"))
 			engine = SND_PAULA4;
 	}
@@ -110,7 +114,7 @@ int main(int argc, char **argv)
 	snd_release(0, 3);
 	Delay(25);
 
-	/* 3: eight voices, AHI only */
+	/* 3: eight voices, mixing engines only */
 	if (snd_voices() >= 8) {
 		for (i = 0; i < 8; i++)
 			snd_playsample(i, id, 0, (LONG)(wide_hz[i] * CYCLE), 65536 / 4,

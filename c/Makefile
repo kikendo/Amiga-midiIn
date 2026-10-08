@@ -1,8 +1,9 @@
 # Build with the AmigaPorts / Bebbo m68k-amigaos-gcc (tested target: 6.5.0b)
 # and vasm, which comes with it.
 #
-#   make              build for plain 68000 (the AHI engine still needs a
-#                     68020 at run time; the program checks)
+#   make              build for plain 68000 (the AHI and Paula 14-bit
+#                     engines still need a 68020 at run time; the program
+#                     checks)
 #   make CPU=-m68020  build the C code for 68020 and up
 #   make clean
 #
@@ -31,7 +32,8 @@ BUILD   := build
 
 AUDIO   := src/audio
 SND_OBJS := $(BUILD)/snd.o $(BUILD)/snd_ahi.o $(BUILD)/snd_paula4.o \
-            $(BUILD)/paula4.o $(BUILD)/softmix.o $(BUILD)/hookentry.o
+            $(BUILD)/snd_paula14.o $(BUILD)/paula4.o $(BUILD)/paula14.o \
+            $(BUILD)/softmix.o $(BUILD)/play14.o $(BUILD)/hookentry.o
 
 all: $(BUILD)/paula4_demo $(BUILD)/snd_demo
 
@@ -50,11 +52,20 @@ $(BUILD)/snd.o: $(AUDIO)/snd.c $(AUDIO)/snd.h $(AUDIO)/snd_backend.h | $(BUILD)
 $(BUILD)/snd_paula4.o: $(AUDIO)/snd_paula4.c $(AUDIO)/snd_backend.h $(AUDIO)/paula4.h | $(BUILD)
 	$(CC) $(CPU) $(CFLAGS) -c -o $@ $< $(CRT)
 
+$(BUILD)/paula14.o: $(AUDIO)/paula14.c $(AUDIO)/paula14.h | $(BUILD)
+	$(CC) $(CPU) $(CFLAGS) -c -o $@ $< $(CRT)
+
+$(BUILD)/snd_paula14.o: $(AUDIO)/snd_paula14.c $(AUDIO)/snd_backend.h $(AUDIO)/paula14.h | $(BUILD)
+	$(CC) $(CPU) $(CFLAGS) -c -o $@ $< $(CRT)
+
 $(BUILD)/snd_ahi.o: $(AUDIO)/snd_ahi.c $(AUDIO)/snd.h $(AUDIO)/snd_backend.h $(AUDIO)/softmix.h | $(BUILD)
 	$(CC) $(CPU) $(CFLAGS) $(AHI_CFLAGS) -c -o $@ $< $(CRT)
 
-# softmix.s is 68020 code whatever CPU the C code is built for
+# softmix.s and play14.s are 68020 code whatever CPU the C code is built for
 $(BUILD)/softmix.o: $(AUDIO)/softmix.s | $(BUILD)
+	$(VASM) -Fhunk -m68020 -quiet -o $@ $<
+
+$(BUILD)/play14.o: $(AUDIO)/play14.s | $(BUILD)
 	$(VASM) -Fhunk -m68020 -quiet -o $@ $<
 
 $(BUILD)/hookentry.o: $(AUDIO)/hookentry.s | $(BUILD)

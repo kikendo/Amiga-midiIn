@@ -3,8 +3,8 @@
  * (68020 or better).
  *
  * Samples are 16-bit signed, mono or interleaved stereo. Channel numbers are
- * 0..31, sample numbers are 1-based. volume: 65536 = 100%. pan: 0 = left,
- * 65536 = right. A negative frequency plays backwards; a negative loop start
+ * 0..31, sample numbers are 1-based. volume: 65536 = 100%. pan: 0 = right,
+ * 65536 = left. A negative frequency plays backwards; a negative loop start
  * is a one-shot.
  */
 #ifndef SOFTMIX_H
