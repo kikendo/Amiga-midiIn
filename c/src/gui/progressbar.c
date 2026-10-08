@@ -200,8 +200,7 @@ void progressbar_settext(struct progressbar *pb, CONST_STRPTR text1,
 				DisposeRegion(region);
 				return;
 			}
-			if (t1x > px)
-				e_box(rp, px, py, t1x - 1, ymax, pb->textpen);
+			e_box(rp, px, py, t1x - 1, ymax, pb->textpen);  /* t1x > px */
 			SetBPen(rp, pb->textpen);
 			SetAPen(rp, pb->shinepen);
 			if (k > 0)

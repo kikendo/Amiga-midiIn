@@ -18,6 +18,10 @@
  * - The timer request is only aborted at exit if it was sent.
  * - freeprefs() (setup.c) runs after freeallMRoutes(), for what the E
  *   runtime freed at exit.
+ * - New AUDIO argument / tooltype: AUTO (default: AHI, else Paula 14-bit
+ *   on a 68020+, else Paula 4 channel), AHI, PAULA14 or PAULA. The
+ *   arguments are read before the sound engine is set up.
+ * - midiIn runs on a 32 KB stack of its own if it was started with less.
  * - The variables used in the cleanup are file statics, so they keep
  *   their values when an exception jumps out of the main loop.
  */
@@ -57,6 +61,7 @@
 #include "play.h"
 #include "undo.h"
 #include "sfx.h"
+#include "../audio/snd.h"
 #include "../gui/egui.h"
 #include "../gui/setup.h"
 #include "../gui/pianokeys.h"
@@ -94,6 +99,7 @@ extern struct WBStartup *_WBenchMsg;    /* libnix */
 static ULONG dummy;
 static char pubscreenname[121];
 static STRPTR fontname;                 /* FONTNAME, AllocVec'd */
+static LONG audioengine = SND_AUTO;     /* AUDIO */
 static BPTR oldlock;
 static BOOL dirchanged;
 
@@ -145,15 +151,27 @@ static STRPTR strdupvec(CONST_STRPTR s)
 	return d;
 }
 
+/* AUDIO=AUTO|AHI|PAULA14|PAULA */
+static LONG engineval(CONST_STRPTR s)
+{
+	if (!Stricmp(s, (CONST_STRPTR)"AHI"))
+		return SND_AHI;
+	if (!Stricmp(s, (CONST_STRPTR)"PAULA14"))
+		return SND_PAULA14;
+	if (!Stricmp(s, (CONST_STRPTR)"PAULA"))
+		return SND_PAULA4;
+	return SND_AUTO;
+}
+
 static void getargs(void)
 {
-	LONG a[6] = { 0, 0, 0, 0, 0, 0 };
+	LONG a[7] = { 0, 0, 0, 0, 0, 0, 0 };
 	struct RDArgs *rdargs;
 	STRPTR s;
 	LONG l, fsize = 0, i;
 
 	if (!_WBenchMsg) {
-		rdargs = ReadArgs((CONST_STRPTR)"PROJECT, PUBSCREENNAME, FONTNAME, FONTSIZE/N, CX_POPKEY, CX_PRIORITY/N",
+		rdargs = ReadArgs((CONST_STRPTR)"PROJECT, PUBSCREENNAME, FONTNAME, FONTSIZE/N, CX_POPKEY, CX_PRIORITY/N, AUDIO/K",
 		                  a, 0);
 		if (rdargs) {
 			if ((s = (STRPTR)a[0])) {
@@ -174,6 +192,8 @@ static void getargs(void)
 				estrcpy((STRPTR)cxhotkey, s, sizeof(cxhotkey));
 			if ((s = (STRPTR)a[5]))
 				cxpri = *(LONG *)s;
+			if ((s = (STRPTR)a[6]))
+				audioengine = engineval(s);
 			FreeArgs(rdargs);
 		}
 	} else if (IconBase) {
@@ -206,6 +226,9 @@ static void getargs(void)
 						estrcpy((STRPTR)cxhotkey, s, sizeof(cxhotkey));
 				if ((s = FindToolType((APTR)tt, (CONST_STRPTR)"CX_PRIORITY")))
 					cxpri = val(s);
+				if ((s = FindToolType((APTR)tt, (CONST_STRPTR)"AUDIO")))
+					if (audioengine == SND_AUTO)
+						audioengine = engineval(s);
 				FreeDiskObject(diskobj);
 			}
 			if (i > 0) {
@@ -417,14 +440,14 @@ static LONG midiin_main(void)
 		sigtime = 1UL << timermp->mp_SigBit;
 		triggertime(timereq, 1000000 / 10);
 
+		E_TRACE("arguments");
+		getargs();
 		E_TRACE("audio");
-		initsoundfx(NUMBANKS);
+		initsoundfx(NUMBANKS, audioengine);
 
 		E_TRACE("undo");
 		init_undo(10000);
 
-		E_TRACE("arguments");
-		getargs();
 		if (defta)
 			if (!(deffont = OpenDiskFont(defta))) {
 				e_dispose(defta);

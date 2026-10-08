@@ -32,7 +32,10 @@ struct sfx {
 #define SFX_SET_APPLYAUDIO   (TAG_USER + 4)
 #define SFX_GET_AUDIO_STATUS (TAG_USER + 5)
 
-void initsoundfx(UWORD numsamples);     /* raises 'AUDB' if no engine */
+/* engine: SND_AUTO etc. (snd.h); raises 'AUDB' if it cannot be used */
+void initsoundfx(UWORD numsamples, LONG engine);
+/* the engine asked for (AUDIO argument / tooltype) */
+extern LONG sfx_engine_req;
 void freesoundfx(void);
 LONG audio_attrs(struct TagItem *tags);
 

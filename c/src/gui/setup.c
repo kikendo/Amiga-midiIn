@@ -7,8 +7,8 @@
  * Differences from the E code:
  * - The audio engine is chosen at run time and AHI may be missing. The
  *   AHI mode requester and mode information open ahi.device (version 4,
- *   AHI_NO_UNIT) for the call and close it after, or use the base of the
- *   AHI engine if that is running. Without AHI the mode button and the
+ *   AHI_NO_UNIT) for the call and close it after (only with AUDIO=AHI),
+ *   or use the base of the AHI engine if that is running. Without AHI the mode button and the
  *   mixing frequency slider are disabled and the info fields stay empty.
  * - Without a frequency table (no AHI) setmixfreq() keeps the requested
  *   frequency instead of leaving mixfreq unchanged (0 at start), so the
@@ -60,6 +60,7 @@ static struct Library *setup_ahibase;
 #include "../app/diskoper.h"
 #include "../app/play.h"
 #include "../app/sfx.h"
+#include "../audio/snd.h"
 #include "../app/banks.h"
 #include "../app/report.h"
 
@@ -160,6 +161,10 @@ static BOOL ahi_open(void)
 		setup_ahibase = AHIBase;
 		return TRUE;
 	}
+	/* AHI not running: only look at it if AUDIO=AHI was given, so a
+	 * broken AHI setup is not touched again after the fallback */
+	if (sfx_engine_req != SND_AHI)
+		return FALSE;
 	if (!(ahiport = CreateMsgPort()))
 		return FALSE;
 	ahiio = (struct AHIRequest *)CreateIORequest(ahiport, sizeof(struct AHIRequest));

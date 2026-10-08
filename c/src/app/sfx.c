@@ -2,6 +2,7 @@
  * sfx.c - port of soundfx_ahi.e
  *
  * Rate maths uses C doubles where the E code called mathieeedoubbas.library.
+ * The sound engine is chosen with the AUDIO argument / tooltype (new).
  */
 #include <exec/types.h>
 #include <exec/memory.h>
@@ -17,9 +18,12 @@
 
 /* ---------------------------------------------------------------- init */
 
-void initsoundfx(UWORD numsamples)
+LONG sfx_engine_req = SND_AUTO;
+
+void initsoundfx(UWORD numsamples, LONG engine)
 {
-	if (!snd_init(SND_AUTO, numsamples))
+	sfx_engine_req = engine;
+	if (!snd_init((enum snd_engine)engine, numsamples))
 		Raise('AUDB');
 }
 
