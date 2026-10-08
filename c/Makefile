@@ -9,9 +9,10 @@
 # If the tools are not on your PATH:
 #   make CC=/opt/amiga/bin/m68k-amigaos-gcc VASM=/opt/amiga/bin/vasmm68k_mot
 #
-# The AHI headers are not part of this repository. Point AHI_INC at the
-# Developer/Include/C folder of the AHI developer archive
-# (m68k-amigaos-ahidev.lha), or copy that folder to c/sdk/ahi:
+# The AHI headers are not part of this repository. If your toolchain has
+# them (devices/ahi.h in its include folder) nothing needs doing. Otherwise
+# point AHI_INC at the Developer/Include/C folder of the AHI developer
+# archive (m68k-amigaos-ahidev.lha), or copy that folder to c/sdk/ahi:
 #   make AHI_INC=/path/to/Developer/Include/C
 #
 # The C runtime option has to come last on the command line (see CRT), so it
@@ -25,6 +26,7 @@ CPU     ?= -m68000
 CRT     ?= -noixemul
 CFLAGS  ?= -O2 -std=gnu99 -Wall -Wextra -fomit-frame-pointer
 AHI_INC ?= sdk/ahi
+AHI_CFLAGS := $(if $(wildcard $(AHI_INC)/devices/ahi.h),-I$(AHI_INC))
 BUILD   := build
 
 AUDIO   := src/audio
@@ -49,8 +51,7 @@ $(BUILD)/snd_paula4.o: $(AUDIO)/snd_paula4.c $(AUDIO)/snd_backend.h $(AUDIO)/pau
 	$(CC) $(CPU) $(CFLAGS) -c -o $@ $< $(CRT)
 
 $(BUILD)/snd_ahi.o: $(AUDIO)/snd_ahi.c $(AUDIO)/snd.h $(AUDIO)/snd_backend.h $(AUDIO)/softmix.h | $(BUILD)
-	@test -f $(AHI_INC)/devices/ahi.h || { echo "AHI headers not found in $(AHI_INC), see the top of the Makefile"; exit 1; }
-	$(CC) $(CPU) $(CFLAGS) -I$(AHI_INC) -c -o $@ $< $(CRT)
+	$(CC) $(CPU) $(CFLAGS) $(AHI_CFLAGS) -c -o $@ $< $(CRT)
 
 # softmix.s is 68020 code whatever CPU the C code is built for
 $(BUILD)/softmix.o: $(AUDIO)/softmix.s | $(BUILD)
