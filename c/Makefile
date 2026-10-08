@@ -9,7 +9,9 @@
 # The C runtime option has to come last on the command line (see CRT), so it
 # is kept out of CFLAGS.
 
-CC      ?= m68k-amigaos-gcc
+ifeq ($(origin CC),default)
+CC      := m68k-amigaos-gcc
+endif
 CPU     ?= -m68000
 CRT     ?= -noixemul
 CFLAGS  ?= -O2 -std=gnu99 -Wall -Wextra -fomit-frame-pointer
