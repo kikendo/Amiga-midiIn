@@ -662,7 +662,7 @@ static struct Gadget *mkgad(struct EG_GuiPriv *pv, struct Gadget *prev, EG_Obj *
 {
 	struct NewGadget ng;
 	ULONG kind;
-	struct TagItem tags[10];
+	struct TagItem tags[16];
 	int t = 0;
 
 	memset(&ng, 0, sizeof(ng));

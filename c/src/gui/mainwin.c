@@ -264,13 +264,21 @@ static struct MenuItem *settingsitem(LONG item)
 void open_gui(struct Screen *defscreen, struct TextAttr *defta,
               struct TextFont *deffont)
 {
+	E_TRACE("gui: main");
 	open_mainwindow(defscreen, defta);
+	E_TRACE("gui: audio settings");
 	open_sauwin(defscreen, defta);
+	E_TRACE("gui: midi settings");
 	open_setwin(defscreen, defta);
+	E_TRACE("gui: volume");
 	open_volwin(defscreen, defta);
+	E_TRACE("gui: envelope");
 	open_envwin(defscreen, defta);
+	E_TRACE("gui: monitor");
 	open_midimonitwin(defscreen, defta, deffont);
+	E_TRACE("gui: scopes");
 	open_scopewindow(defscreen, defta);
+	E_TRACE("gui: done");
 	if (defscreen)
 		ScreenToFront(defscreen);
 	if (gh->wnd)
