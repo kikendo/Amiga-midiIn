@@ -16,6 +16,8 @@
  *   FALSE instead of catching an exception.
  * - The about picture plugin is freed by egui when its window is removed;
  *   clean_about only forgets the pointers.
+ * - A file that is not a project ('oiff') gets its own message (English,
+ *   not in the catalog) instead of "Not an Interchange File Format".
  * - The version string is a C constant with the contents of version.bin.
  */
 #include <exec/types.h>
@@ -217,7 +219,10 @@ void report_exception(void)
 		         (LONG)LOC(STRID_UNKNOWN), x);
 	} else if (x == 'OPEN' || x == 'oold' || x == 'onew') {
 		estrcpy((STRPTR)s, LOC(STRID_WRONGFILENAME), size);
-	} else if (x == 'oiff' || x == 'NIFF' || x == 'MNGL') {
+	} else if (x == 'oiff') {
+		/* raised only when a project file is read; no catalog string */
+		estrcpy((STRPTR)s, (CONST_STRPTR)"This is not a midiIn project file!", size);
+	} else if (x == 'NIFF' || x == 'MNGL') {
 		estrcpy((STRPTR)s, LOC(STRID_NOTINTERCHANGEFF), size);
 	} else if (x == 'init' || x == 'coll' || x == 'exit' || x == 'iffa'
 	           || x == 'popc') {
