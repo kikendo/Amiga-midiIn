@@ -859,7 +859,7 @@ static void refresh_srclist(void)
 		/* remove sources that are gone */
 		for (n = mysrclist.lh_Head; (next = n->ln_Succ); n = next) {
 			n->ln_Name += 2;
-			if (!FindMSource(n->ln_Name)) {
+			if (!FindMSource((CONST_STRPTR)n->ln_Name)) {
 				Remove(n);
 				e_dispose(n);
 			}

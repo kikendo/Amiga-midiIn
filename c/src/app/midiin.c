@@ -191,19 +191,19 @@ static void getargs(void)
 			}
 			if ((diskobj = GetDiskObject(wb_arg[i].wa_Name))) {
 				tt = (STRPTR *)diskobj->do_ToolTypes;
-				if ((s = FindToolType(tt, (CONST_STRPTR)"PUBSCREENNAME")))
+				if ((s = FindToolType((APTR)tt, (CONST_STRPTR)"PUBSCREENNAME")))
 					if (pubscreenname[0] == 0)
 						estrcpy((STRPTR)pubscreenname, s, sizeof(pubscreenname));
-				if ((s = FindToolType(tt, (CONST_STRPTR)"FONTNAME")))
+				if ((s = FindToolType((APTR)tt, (CONST_STRPTR)"FONTNAME")))
 					if (!fontname)
 						fontname = strdupvec(s);
-				if ((s = FindToolType(tt, (CONST_STRPTR)"FONTSIZE")))
+				if ((s = FindToolType((APTR)tt, (CONST_STRPTR)"FONTSIZE")))
 					if (fsize < 4)
 						fsize = val(s);
-				if ((s = FindToolType(tt, (CONST_STRPTR)"CX_POPKEY")))
+				if ((s = FindToolType((APTR)tt, (CONST_STRPTR)"CX_POPKEY")))
 					if (cxhotkey[0] == 0)
 						estrcpy((STRPTR)cxhotkey, s, sizeof(cxhotkey));
-				if ((s = FindToolType(tt, (CONST_STRPTR)"CX_PRIORITY")))
+				if ((s = FindToolType((APTR)tt, (CONST_STRPTR)"CX_PRIORITY")))
 					cxpri = val(s);
 				FreeDiskObject(diskobj);
 			}
