@@ -1,0 +1,67 @@
+Porting notes: AmigaE (src/*.e) to C (c/src)
+=============================================
+
+Toolchain: m68k-amigaos-gcc 6.5 (Bebbo), -m68000 -O2 -std=gnu99, libnix.
+Code must run on a plain 68000 (no 020 instructions; no unaligned word or
+long access; structures read from files only at even addresses).
+
+AmigaE semantics to watch
+-------------------------
+* No operator precedence: binary operators go strictly left to right.
+  a+b*c is (a+b)*c, a-b/2 is (a-b)/2, x+1 AND $FE is (x+1) AND $FE.
+  Parenthesised parts are evaluated first as usual. Comparisons and
+  AND/OR in conditions are usually parenthesised in the sources; check.
+* AND, OR are bitwise (also used as logical on booleans).
+* x++ is post-increment, but x-- is PRE-decrement (like -(An)).
+* p[]++ reads/writes through p then advances it by the element size.
+* An untyped variable used as a pointer (v[], v[]++) works on bytes.
+* PTR TO object: p[i] is the i-th object, p++ advances by its size.
+* DIV/MUL: '/' and '*' are 16x16 bit in E unless Div()/Mul() or the
+  operands need 32 bit; inline MULU/DIVU use the low words. Keep results
+  the same for the value ranges that occur.
+* Strings: E strings (StrCopy, StrAdd, EstrLen, SetStr) have a maximum
+  length; use fixed char buffers with estrcpy/estrcat (eport.h).
+  '\d' '\s' '\h' '\c' '\z' '[n]' in StringF formats: use estringf().
+  In E string literals: \n newline, \a apostrophe, \q double quote,
+  \t tab, \0 NUL, \e ESC, \b CR.
+* TRUE is -1 in E; in C use TRUE (1) unless the value is stored or
+  compared numerically.
+* "ABCD" constants are 4-character ids; C multi-char 'ABCD' gives the
+  same value (gcc, big-endian).
+* Raise/HANDLE/EXCEPT/ReThrow: use E_TRY / E_EXCEPT / E_EXCEPT_DO /
+  E_END and Raise() from eport.h (main task only). Locals changed in an
+  E_TRY block and read after a Raise must be volatile.
+* NEW obj / END obj: allocate cleared memory (e_new) and free (e_dispose).
+  NEW obj.init(...) calls the init method. END calls end() if defined.
+* Methods "PROC m(...) OF obj" become functions taking the object first.
+* Global E variables become static (file) or extern (shared) C variables.
+* Inline assembly in the E sources: translate to C that gives the same
+  results for the values used, unless it is speed critical.
+* Library bases E opens implicitly (intuitionbase, gfxbase, ...) come
+  from libnix's auto-open in C: just include proto/xxx.h.
+
+EasyGUI
+-------
+c/src/gui/egui.h replaces EasyGUI. E plugins (OBJECT x OF plugin) become
+a struct whose first member is struct EG_Plugin, plus a const
+struct EG_PluginClass with the methods. self.x/y/xs/ys are p->x etc.
+E GUI lists become eg_rows(...)/eg_cols(...) calls, NULL terminated.
+Field order of the E gadget lists:
+  [TEXT,current,label,border,minchars]
+  [NUM,value,label,border,minchars]
+  [BUTTON,action,label,data,key]      (SBUTTON: same, stretches)
+  [CHECK,action,label,checked,left,data,key,disabled]
+  [SLIDE,action,label,vertical,min,max,current,chars,levelformat,data,key,disabled]
+  [MX,action,label,labels,left,current,data,key]
+  [CYCLE,action,label,labels,current,data,key]
+  [LISTV,action,label,minchars,minlines,list,readonly,selected,current,...,appproc,...]
+  [PLUGIN,action,object,...]
+E action procs get (info, value); in C all actions are
+void f(EG_Gui *gh, EG_Obj *obj, LONG value); use gh->info for "info".
+
+Style
+-----
+Tabs, K&R braces, comments in plain English, short. A header comment
+names the E file the code comes from. Note deliberate differences from
+the E code in that header comment. Compile check:
+  /home/claude/tools/m68kcc file.c   (prints only warnings/errors)
