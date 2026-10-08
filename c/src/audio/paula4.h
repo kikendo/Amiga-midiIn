@@ -27,13 +27,18 @@
 #define PAULA4_MAX_BYTES  131070UL    /* AUDxLEN is a 16 bit word count */
 
 /*
- * Claims all four audio channels through audio.device and installs the
- * 50 Hz tick. max_samples is the size of the sample table.
- * Returns FALSE (and leaves nothing allocated) on failure.
+ * paula4_open() sets up the sample table (max_samples entries); samples can
+ * be loaded from then on. paula4_audio_on() claims all four audio channels
+ * through audio.device and starts the 50 Hz tick; paula4_audio_off() hands
+ * them back, the samples stay loaded. paula4_close() does both and frees
+ * the samples. The open calls return FALSE on failure.
  */
 BOOL paula4_open(UWORD max_samples);
 void paula4_close(void);
 BOOL paula4_is_open(void);
+BOOL paula4_audio_on(void);
+void paula4_audio_off(void);
+BOOL paula4_is_on(void);
 
 /*
  * Registers a sample. frames is the length in bytes. Returns a 1-based sample
@@ -42,6 +47,9 @@ BOOL paula4_is_open(void);
  * stay valid until paula4_unload(); otherwise a private copy is made.
  */
 ULONG paula4_load(const BYTE *data, ULONG frames);
+/* same, from 16-bit mono data: the high byte of each frame is kept, always
+ * into a private Chip RAM copy */
+ULONG paula4_load16(const WORD *data, ULONG frames);
 void  paula4_unload(ULONG id);          /* stops any voice playing it */
 
 /*
@@ -61,7 +69,7 @@ ULONG paula4_free_voices(ULONG mask);
 
 /*
  * Called at 50 Hz from the vertical blank interrupt (also on NTSC), after the
- * engine's own bookkeeping. Runs in interrupt context: keep it short and do
+ * engine's own bookkeeping, while the audio is on. Runs in interrupt context: keep it short and do
  * not call exec functions that may wait. NULL to clear.
  */
 void paula4_set_tick(void (*fn)(void));

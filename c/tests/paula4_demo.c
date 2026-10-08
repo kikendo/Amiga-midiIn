@@ -73,6 +73,10 @@ int main(void)
 		goto done;
 	}
 	if (!paula4_open(8)) {
+		printf("out of memory\n");
+		goto done;
+	}
+	if (!paula4_audio_on()) {
 		printf("could not open the audio hardware (audio.device busy?)\n");
 		goto done;
 	}

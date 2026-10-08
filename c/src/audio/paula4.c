@@ -52,6 +52,7 @@ struct p4voice {
 
 static struct {
 	BOOL             open;
+	BOOL             on;         /* audio channels claimed */
 	struct p4sample *samples;
 	UWORD            max_samples;
 	struct p4voice   v[PAULA4_VOICES];
@@ -198,25 +199,11 @@ BOOL paula4_open(UWORD max_samples)
 
 	P.vbl_rate = (SysBase->VBlankFrequency == 50) ? 50 : 60;
 	P.clock = (SysBase->VBlankFrequency == 50) ? PAL_CLOCK : NTSC_CLOCK;
-	P.vbl_acc = 0;
 	P.tick_cb = 0;
 	for (i = 0; i < PAULA4_VOICES; i++) {
 		P.v[i].sample = 0;
 		P.v[i].busy = FALSE;
 	}
-
-	if (!claim_audio())
-		goto fail;
-	CUSTOM->dmacon = DMAF_AUD0 | DMAF_AUD1 | DMAF_AUD2 | DMAF_AUD3;
-
-	P.vbl.is_Node.ln_Type = NT_INTERRUPT;
-	P.vbl.is_Node.ln_Pri = 0;
-	P.vbl.is_Node.ln_Name = (char *)"paula4 tick";
-	P.vbl.is_Data = 0;
-	P.vbl.is_Code = (void (*)())vbl_isr;
-	AddIntServer(INTB_VERTB, &P.vbl);
-	P.vbl_added = TRUE;
-
 	P.open = TRUE;
 	return TRUE;
 
@@ -230,7 +217,41 @@ BOOL paula4_is_open(void)
 	return P.open;
 }
 
-void paula4_close(void)
+BOOL paula4_audio_on(void)
+{
+	UWORD i;
+
+	if (!P.open)
+		return FALSE;
+	if (P.on)
+		return TRUE;
+	if (!claim_audio()) {
+		paula4_audio_off();
+		return FALSE;
+	}
+	CUSTOM->dmacon = DMAF_AUD0 | DMAF_AUD1 | DMAF_AUD2 | DMAF_AUD3;
+	for (i = 0; i < PAULA4_VOICES; i++)
+		P.v[i].busy = FALSE;
+
+	P.vbl_acc = 0;
+	P.vbl.is_Node.ln_Type = NT_INTERRUPT;
+	P.vbl.is_Node.ln_Pri = 0;
+	P.vbl.is_Node.ln_Name = (char *)"paula4 tick";
+	P.vbl.is_Data = 0;
+	P.vbl.is_Code = (void (*)())vbl_isr;
+	AddIntServer(INTB_VERTB, &P.vbl);
+	P.vbl_added = TRUE;
+
+	P.on = TRUE;
+	return TRUE;
+}
+
+BOOL paula4_is_on(void)
+{
+	return P.on;
+}
+
+void paula4_audio_off(void)
 {
 	UWORD i;
 
@@ -251,6 +272,16 @@ void paula4_close(void)
 		DeleteMsgPort(P.port);
 		P.port = 0;
 	}
+	for (i = 0; i < PAULA4_VOICES; i++)
+		P.v[i].busy = FALSE;
+	P.on = FALSE;
+}
+
+void paula4_close(void)
+{
+	UWORD i;
+
+	paula4_audio_off();
 	if (P.samples) {
 		for (i = 0; i < P.max_samples; i++) {
 			if (P.samples[i].data && P.samples[i].owned)
@@ -305,6 +336,37 @@ ULONG paula4_load(const BYTE *data, ULONG frames)
 	return (ULONG)i + 1;
 }
 
+ULONG paula4_load16(const WORD *data, ULONG frames)
+{
+	struct p4sample *s = 0;
+	BYTE *chip;
+	UWORD i;
+	ULONG n, bytes;
+
+	if (!P.open || !data || frames < 2 || frames > PAULA4_MAX_BYTES)
+		return 0;
+	for (i = 0; i < P.max_samples; i++) {
+		if (!P.samples[i].data) {
+			s = &P.samples[i];
+			break;
+		}
+	}
+	if (!s)
+		return 0;
+
+	bytes = (frames + 1) & ~1UL;
+	chip = (BYTE *)AllocMem(bytes, MEMF_CHIP | MEMF_CLEAR);
+	if (!chip)
+		return 0;
+	for (n = 0; n < frames; n++)
+		chip[n] = (BYTE)(data[n] >> 8);
+	s->data = chip;
+	s->owned = TRUE;
+	s->frames = frames;
+	s->bytes = bytes;
+	return (ULONG)i + 1;
+}
+
 void paula4_unload(ULONG id)
 {
 	struct p4sample *s;
@@ -337,7 +399,7 @@ void paula4_play(UWORD voice, ULONG id, LONG offset, LONG freq,
 	UWORD period;
 	BOOL looped = (loop >= 0);
 
-	if (!P.open || voice >= PAULA4_VOICES || id == 0 || id > P.max_samples)
+	if (!P.on || voice >= PAULA4_VOICES || id == 0 || id > P.max_samples)
 		return;
 	s = &P.samples[id - 1];
 	if (!s->data)
@@ -385,10 +447,11 @@ void paula4_play(UWORD voice, ULONG id, LONG offset, LONG freq,
 
 void paula4_stop(UWORD voice)
 {
-	if (!P.open || voice >= PAULA4_VOICES)
+	if (voice >= PAULA4_VOICES)
 		return;
 	Disable();
-	dma_off(voice);
+	if (P.on)
+		dma_off(voice);
 	P.v[voice].busy = FALSE;
 	Enable();
 }
@@ -405,7 +468,7 @@ void paula4_stop_mask(ULONG mask)
 
 void paula4_set_volume(UWORD voice, ULONG volume)
 {
-	if (!P.open || voice >= PAULA4_VOICES)
+	if (!P.on || voice >= PAULA4_VOICES)
 		return;
 	CUSTOM->aud[voice].ac_vol = volume64(volume);
 }
@@ -414,7 +477,7 @@ void paula4_set_freq(UWORD voice, LONG freq)
 {
 	UWORD period;
 
-	if (!P.open || voice >= PAULA4_VOICES)
+	if (!P.on || voice >= PAULA4_VOICES)
 		return;
 	period = freq_to_period(freq);
 	Disable();

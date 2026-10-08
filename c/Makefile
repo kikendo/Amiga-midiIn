@@ -1,10 +1,18 @@
-# Build with the AmigaPorts / Bebbo m68k-amigaos-gcc (tested target: 6.5.0b).
+# Build with the AmigaPorts / Bebbo m68k-amigaos-gcc (tested target: 6.5.0b)
+# and vasm, which comes with it.
 #
-#   make              build for plain 68000
-#   make CPU=-m68020  build for 68020 and up
+#   make              build for plain 68000 (the AHI engine still needs a
+#                     68020 at run time; the program checks)
+#   make CPU=-m68020  build the C code for 68020 and up
 #   make clean
 #
-# If the compiler is not on your PATH:  make CC=/opt/amiga/bin/m68k-amigaos-gcc
+# If the tools are not on your PATH:
+#   make CC=/opt/amiga/bin/m68k-amigaos-gcc VASM=/opt/amiga/bin/vasmm68k_mot
+#
+# The AHI headers are not part of this repository. Point AHI_INC at the
+# Developer/Include/C folder of the AHI developer archive
+# (m68k-amigaos-ahidev.lha), or copy that folder to c/sdk/ahi:
+#   make AHI_INC=/path/to/Developer/Include/C
 #
 # The C runtime option has to come last on the command line (see CRT), so it
 # is kept out of CFLAGS.
@@ -12,22 +20,49 @@
 ifeq ($(origin CC),default)
 CC      := m68k-amigaos-gcc
 endif
+VASM    ?= vasmm68k_mot
 CPU     ?= -m68000
 CRT     ?= -noixemul
 CFLAGS  ?= -O2 -std=gnu99 -Wall -Wextra -fomit-frame-pointer
+AHI_INC ?= sdk/ahi
 BUILD   := build
 
-AUDIO_OBJS := $(BUILD)/paula4.o
+AUDIO   := src/audio
+SND_OBJS := $(BUILD)/snd.o $(BUILD)/snd_ahi.o $(BUILD)/snd_paula4.o \
+            $(BUILD)/paula4.o $(BUILD)/softmix.o $(BUILD)/hookentry.o
 
-all: $(BUILD)/paula4_demo
+all: $(BUILD)/paula4_demo $(BUILD)/snd_demo
 
-$(BUILD)/paula4_demo: $(BUILD)/paula4_demo.o $(AUDIO_OBJS)
+$(BUILD)/paula4_demo: $(BUILD)/paula4_demo.o $(BUILD)/paula4.o
 	$(CC) $(CPU) -o $@ $^ $(CRT)
 
-$(BUILD)/paula4.o: src/audio/paula4.c src/audio/paula4.h | $(BUILD)
+$(BUILD)/snd_demo: $(BUILD)/snd_demo.o $(SND_OBJS)
+	$(CC) $(CPU) -o $@ $^ $(CRT)
+
+$(BUILD)/paula4.o: $(AUDIO)/paula4.c $(AUDIO)/paula4.h | $(BUILD)
 	$(CC) $(CPU) $(CFLAGS) -c -o $@ $< $(CRT)
 
-$(BUILD)/paula4_demo.o: tests/paula4_demo.c src/audio/paula4.h | $(BUILD)
+$(BUILD)/snd.o: $(AUDIO)/snd.c $(AUDIO)/snd.h $(AUDIO)/snd_backend.h | $(BUILD)
+	$(CC) $(CPU) $(CFLAGS) -c -o $@ $< $(CRT)
+
+$(BUILD)/snd_paula4.o: $(AUDIO)/snd_paula4.c $(AUDIO)/snd_backend.h $(AUDIO)/paula4.h | $(BUILD)
+	$(CC) $(CPU) $(CFLAGS) -c -o $@ $< $(CRT)
+
+$(BUILD)/snd_ahi.o: $(AUDIO)/snd_ahi.c $(AUDIO)/snd.h $(AUDIO)/snd_backend.h $(AUDIO)/softmix.h | $(BUILD)
+	@test -f $(AHI_INC)/devices/ahi.h || { echo "AHI headers not found in $(AHI_INC), see the top of the Makefile"; exit 1; }
+	$(CC) $(CPU) $(CFLAGS) -I$(AHI_INC) -c -o $@ $< $(CRT)
+
+# softmix.s is 68020 code whatever CPU the C code is built for
+$(BUILD)/softmix.o: $(AUDIO)/softmix.s | $(BUILD)
+	$(VASM) -Fhunk -m68020 -quiet -o $@ $<
+
+$(BUILD)/hookentry.o: $(AUDIO)/hookentry.s | $(BUILD)
+	$(VASM) -Fhunk -m68000 -quiet -o $@ $<
+
+$(BUILD)/paula4_demo.o: tests/paula4_demo.c $(AUDIO)/paula4.h | $(BUILD)
+	$(CC) $(CPU) $(CFLAGS) -c -o $@ $< $(CRT)
+
+$(BUILD)/snd_demo.o: tests/snd_demo.c $(AUDIO)/snd.h | $(BUILD)
 	$(CC) $(CPU) $(CFLAGS) -c -o $@ $< $(CRT)
 
 $(BUILD):
