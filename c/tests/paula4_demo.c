@@ -4,10 +4,12 @@
  * Run it from a shell on an Amiga or in an emulator. What you should hear:
  *   1. four looped triangle waves entering one by one, voice 0 to 3
  *      (A4, C#5, E5, A5: an A major chord), held, then fading out together
- *   2. a short decaying noise burst on voice 0, played once. The program
- *      prints when the engine reports the voice free again; the burst lasts
- *      about half a second.
- *   3. the same burst with a pitch glide, to check paula4_set_freq()
+ *   2. a short burst of noise on voice 0 that fades out (loudness only, the
+ *      pitch does not change), played once. The program prints when the
+ *      engine reports the voice free again; the burst lasts about half a
+ *      second.
+ *   3. a single triangle tone on voice 0 sliding up one octave over about
+ *      two seconds, then back down, to check paula4_set_freq()
  */
 #include <stdio.h>
 #include <exec/types.h>
@@ -89,7 +91,7 @@ int main(void)
 	}
 	say_free("chord playing");
 	Delay(100);
-	for (t = 64; t >= 0; t--) {
+	for (t = 32; t >= 0; t--) {       /* the chord plays at half volume (32/64) */
 		for (i = 0; i < 4; i++)
 			paula4_set_volume(i, (ULONG)t << 10);
 		Delay(1);
@@ -112,13 +114,19 @@ int main(void)
 		printf("burst never reported finished\n");
 	Delay(50);
 
-	/* 3: glide */
-	paula4_play(0, burst_id, 0, 6000, 65536, -1);
-	for (t = 0; t < 25; t++) {
-		paula4_set_freq(0, 6000 + t * 400);
+	/* 3: glide, A4 up to A5 and back, 100 steps each way at 50 Hz */
+	paula4_play(0, tri_id, 0, (LONG)(440 * CYCLE), 65536 / 2, 0);
+	Delay(25);
+	for (t = 0; t <= 100; t++) {
+		paula4_set_freq(0, (LONG)((440 + (440 * t) / 100) * CYCLE));
 		Delay(1);
 	}
-	Delay(50);
+	for (t = 100; t >= 0; t--) {
+		paula4_set_freq(0, (LONG)((440 + (440 * t) / 100) * CYCLE));
+		Delay(1);
+	}
+	Delay(25);
+	paula4_stop(0);
 	say_free("end");
 
 done:
