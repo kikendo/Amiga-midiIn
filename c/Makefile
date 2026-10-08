@@ -38,12 +38,14 @@ SND_OBJS := $(BUILD)/snd.o $(BUILD)/snd_ahi.o $(BUILD)/snd_paula4.o \
 APP_SRCS := $(wildcard src/app/*.c) $(wildcard src/gui/*.c)
 APP_OBJS := $(patsubst src/%.c,$(BUILD)/%.o,$(APP_SRCS))
 APP_CFLAGS := -Iinclude -Wno-multichar -Wno-clobbered
+# libnix's libm: double maths through mathieeedoubbas.library, as the E code
+APP_LIBS := -lm
 
 all: $(BUILD)/midiIn $(BUILD)/paula4_demo $(BUILD)/snd_demo
 
 # the program
 $(BUILD)/midiIn: $(APP_OBJS) $(SND_OBJS)
-	$(CC) $(CPU) -o $@ $^ $(CRT)
+	$(CC) $(CPU) -o $@ $^ $(APP_LIBS) $(CRT)
 
 $(BUILD)/app/%.o: src/app/%.c $(wildcard src/app/*.h) $(wildcard src/gui/*.h) | $(BUILD)
 	@mkdir -p $(dir $@)
