@@ -1,7 +1,7 @@
 # Build with the AmigaPorts / Bebbo m68k-amigaos-gcc (tested target: 6.5.0b)
 # and vasm, which comes with it.
 #
-#   make              build for plain 68000 (the AHI and Paula 14-bit
+#   make              build midiIn and the tests for plain 68000 (the AHI and Paula 14-bit
 #                     engines still need a 68020 at run time; the program
 #                     checks)
 #   make CPU=-m68020  build the C code for 68020 and up
@@ -35,7 +35,23 @@ SND_OBJS := $(BUILD)/snd.o $(BUILD)/snd_ahi.o $(BUILD)/snd_paula4.o \
             $(BUILD)/snd_paula14.o $(BUILD)/paula4.o $(BUILD)/paula14.o \
             $(BUILD)/softmix.o $(BUILD)/play14.o $(BUILD)/hookentry.o
 
-all: $(BUILD)/paula4_demo $(BUILD)/snd_demo
+APP_SRCS := $(wildcard src/app/*.c) $(wildcard src/gui/*.c)
+APP_OBJS := $(patsubst src/%.c,$(BUILD)/%.o,$(APP_SRCS))
+APP_CFLAGS := -Iinclude -Wno-multichar -Wno-clobbered
+
+all: $(BUILD)/midiIn $(BUILD)/paula4_demo $(BUILD)/snd_demo
+
+# the program
+$(BUILD)/midiIn: $(APP_OBJS) $(SND_OBJS)
+	$(CC) $(CPU) -o $@ $^ $(CRT)
+
+$(BUILD)/app/%.o: src/app/%.c $(wildcard src/app/*.h) $(wildcard src/gui/*.h) | $(BUILD)
+	@mkdir -p $(dir $@)
+	$(CC) $(CPU) $(CFLAGS) $(APP_CFLAGS) $(AHI_CFLAGS) -c -o $@ $< $(CRT)
+
+$(BUILD)/gui/%.o: src/gui/%.c $(wildcard src/app/*.h) $(wildcard src/gui/*.h) | $(BUILD)
+	@mkdir -p $(dir $@)
+	$(CC) $(CPU) $(CFLAGS) $(APP_CFLAGS) $(AHI_CFLAGS) -c -o $@ $< $(CRT)
 
 $(BUILD)/paula4_demo: $(BUILD)/paula4_demo.o $(BUILD)/paula4.o
 	$(CC) $(CPU) -o $@ $^ $(CRT)
