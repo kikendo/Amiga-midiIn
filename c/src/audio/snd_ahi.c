@@ -103,10 +103,10 @@ static BOOL ahi_init(UWORD max_samples)
 	A.device_open = TRUE;
 	AHIBase = (struct Library *)A.io->ahir_Std.io_Device;
 
-	A.soundhook.h_Entry = (HOOKFUNC)snd_hook_entry;
-	A.soundhook.h_SubEntry = (HOOKFUNC)sound_func;
-	A.playerhook.h_Entry = (HOOKFUNC)snd_hook_entry;
-	A.playerhook.h_SubEntry = (HOOKFUNC)player_func;
+	A.soundhook.h_Entry = (APTR)snd_hook_entry;
+	A.soundhook.h_SubEntry = (APTR)sound_func;
+	A.playerhook.h_Entry = (APTR)snd_hook_entry;
+	A.playerhook.h_SubEntry = (APTR)player_func;
 	return TRUE;
 
 fail:
