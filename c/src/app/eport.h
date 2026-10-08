@@ -93,6 +93,17 @@ struct List *newlist(struct List *lh);  /* initialise (lh != NULL) */
 void addsorted(struct List *lh, struct Node *ln);
 LONG convlnptrtonum(APTR ptr, struct List *lh); /* 1-based, 0 = not found */
 
+/*
+ * Startup trace for finding crashes: built with make DEBUG=1, E_TRACE()
+ * writes a line to the Shell window and Throw() reports each exception.
+ */
+#ifdef MI_DEBUG
+void e_trace(CONST_STRPTR s);
+#define E_TRACE(s) e_trace((CONST_STRPTR)(s))
+#else
+#define E_TRACE(s) ((void)0)
+#endif
+
 #define E_MIN(a, b) ((a) < (b) ? (a) : (b))
 #define E_MAX(a, b) ((a) > (b) ? (a) : (b))
 

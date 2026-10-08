@@ -26,6 +26,7 @@
 #include <exec/memory.h>
 #include <exec/ports.h>
 #include <exec/io.h>
+#include <exec/tasks.h>
 #include <dos/dos.h>
 #include <dos/rdargs.h>
 #include <devices/timer.h>
@@ -342,7 +343,33 @@ static void cxinput(void)
 
 /* ------------------------------------------------------------ main */
 
+/* the stack midiIn needs; the E program allocated its own too */
+#define STACKNEED 32768
+
+extern LONG stack_call(struct StackSwapStruct *sss, LONG (*func)(void));
+
+static LONG midiin_main(void);
+
 int main(void)
+{
+	static struct StackSwapStruct sss;
+	struct Task *me = FindTask(0);
+	APTR stack;
+	LONG r;
+
+	if ((ULONG)me->tc_SPUpper - (ULONG)me->tc_SPLower >= STACKNEED)
+		return (int)midiin_main();
+	if (!(stack = AllocVec(STACKNEED, MEMF_PUBLIC)))
+		return 20;
+	sss.stk_Lower = stack;
+	sss.stk_Upper = (ULONG)stack + STACKNEED;
+	sss.stk_Pointer = (APTR)sss.stk_Upper;
+	r = stack_call(&sss, midiin_main);
+	FreeVec(stack);
+	return (int)r;
+}
+
+static LONG midiin_main(void)
 {
 	E_TRY {
 		LONG res = -1;
@@ -352,6 +379,7 @@ int main(void)
 		CxObj *filter;
 		BPTR lock;
 
+		E_TRACE("start");
 		newlist(&smplist);      /* this must be the first thing */
 		initbanks(bd);
 		memset(keybchannels, 255, sizeof(keybchannels));
@@ -361,6 +389,7 @@ int main(void)
 			oldlock = CurrentDir(lock);
 			dirchanged = TRUE;
 		}
+		E_TRACE("libraries");
 		locale_open();
 		IconBase = OpenLibrary((CONST_STRPTR)"icon.library", 36);
 		if (!(UtilityBase = (__typeof__(UtilityBase))OpenLibrary((CONST_STRPTR)"utility.library", 37)))
@@ -373,6 +402,7 @@ int main(void)
 			Throw('LIB', (APTR)"layers v37+");
 		if (!(MidiBase = (struct MidiBase *)OpenLibrary((CONST_STRPTR)"midi.library", MIDIVERSION)))
 			Throw('LIB', (APTR)"midi v7.-1");
+		E_TRACE("midi dest");
 		if (!(dest = CreateMDest(0, 0)))
 			Raise('MEM');
 		if (!(timermp = CreateMsgPort()))
@@ -387,16 +417,20 @@ int main(void)
 		sigtime = 1UL << timermp->mp_SigBit;
 		triggertime(timereq, 1000000 / 10);
 
+		E_TRACE("audio");
 		initsoundfx(NUMBANKS);
 
+		E_TRACE("undo");
 		init_undo(10000);
 
+		E_TRACE("arguments");
 		getargs();
 		if (defta)
 			if (!(deffont = OpenDiskFont(defta))) {
 				e_dispose(defta);
 				defta = NULL;
 			}
+		E_TRACE("commodity");
 		if (!(broker_mp = CreateMsgPort()))
 			Raise('MEM');
 		cxsigflag = 1UL << broker_mp->mp_SigBit;
@@ -420,20 +454,26 @@ int main(void)
 			Raise('CXER');
 		ActivateCxObj(broker, TRUE);
 
+		E_TRACE("about window");
 		defscreen = LockPubScreen((CONST_STRPTR)pubscreenname);
 		open_aboutpic(defscreen, defta);
+		E_TRACE("status window");
 		open_status(defscreen, defta, deffont);
+		E_TRACE("prefs");
 		initprefs((CONST_STRPTR)prjname, bd);
 
 		CurrentTime(&timestart, &dummy);
 		mainbartext = string_info();
+		E_TRACE("main window");
 		open_gui(defscreen, defta, deffont);
 
 		sigwnd = eg_multisig(mh);
 		sigmidi = 1UL << dest->DestPort->mp_SigBit;
 
+		E_TRACE("play task");
 		install_playtask();
 
+		E_TRACE("running");
 		signalmask = sigtime | sigwnd | sigmidi | cxsigflag | SIGBREAKF_CTRL_C;
 		while (res != 0) {
 			res = -1;
@@ -467,18 +507,26 @@ int main(void)
 		};
 		struct Message *msg;
 
+		E_TRACE("cleanup: audio off");
 		audio_attrs(off);
+		E_TRACE("cleanup: windows");
 		if (mh)
 			eg_cleanmulti(mh);
 		mh = NULL;
 		if (defscreen)
 			UnlockPubScreen(0, defscreen);
 		defscreen = NULL;
+		E_TRACE("cleanup: play task");
 		deinstall_playtask();
+		E_TRACE("cleanup: samples");
 		clearsmplist(bd, &smplist, FALSE);
+		E_TRACE("cleanup: routes");
 		freeallMRoutes();
+		E_TRACE("cleanup: prefs");
 		freeprefs();
+		E_TRACE("cleanup: report");
 		report_exception();
+		E_TRACE("cleanup: commodity");
 		if (broker)
 			DeleteCxObjAll(broker);
 		if (broker_mp) {
@@ -486,7 +534,9 @@ int main(void)
 				ReplyMsg(msg);
 			DeleteMsgPort(broker_mp);
 		}
+		E_TRACE("cleanup: undo");
 		free_undo();
+		E_TRACE("cleanup: audio");
 		freesoundfx();
 		if (timereq) {
 			if (timersent) {
@@ -520,6 +570,7 @@ int main(void)
 		if (IconBase)
 			CloseLibrary(IconBase);
 		IconBase = NULL;
+		E_TRACE("cleanup: done");
 		locale_close();
 		if (dirchanged)
 			CurrentDir(oldlock);

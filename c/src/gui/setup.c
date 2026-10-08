@@ -231,9 +231,12 @@ void initprefs(CONST_STRPTR pname, struct bank *bnk)
 	setlayout = FALSE;
 	setsaveicons = TRUE;
 	setsaveundo = TRUE;
+	E_TRACE("prefs: midi sources");
 	refresh_srclist();
+	E_TRACE("prefs: load settings");
 	loadsettings(&smplist, &mbprefs, bnk, pname);
 	ahiaudioid = (ULONG)mbprefs.ahiaudioid;
+	E_TRACE("prefs: ahi mode info");
 	getaudioahiattrs(ahiaudioid);
 	setmixfreq(mbprefs.mixfreq);
 	mcontrol = mbprefs.midictrl != 0 ? TRUE : FALSE;
@@ -251,7 +254,9 @@ void initprefs(CONST_STRPTR pname, struct bank *bnk)
 	if (currmcmon < 0)
 		currmcmon = 0;
 	mbprefs.currentmcm = (WORD)currmcmon;
+	E_TRACE("prefs: audio on");
 	setaudio(ahiaudioid, maxchan + 1, mixfreq, FALSE);
+	E_TRACE("prefs: routes");
 	refresh_srclist();
 	changeMRoutes();
 }

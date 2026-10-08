@@ -6,6 +6,9 @@
 #                     checks)
 #   make CPU=-m68020  build the C code for 68020 and up
 #   make clean
+#   make DEBUG=1      midiIn writes its startup steps and exceptions to
+#                     the Shell window (run it from a Shell); make clean
+#                     first when switching
 #
 # If the tools are not on your PATH:
 #   make CC=/opt/amiga/bin/m68k-amigaos-gcc VASM=/opt/amiga/bin/vasmm68k_mot
@@ -36,10 +39,13 @@ SND_OBJS := $(BUILD)/snd.o $(BUILD)/snd_ahi.o $(BUILD)/snd_paula4.o \
             $(BUILD)/softmix.o $(BUILD)/play14.o $(BUILD)/hookentry.o
 
 APP_SRCS := $(wildcard src/app/*.c) $(wildcard src/gui/*.c)
-APP_OBJS := $(patsubst src/%.c,$(BUILD)/%.o,$(APP_SRCS))
+APP_OBJS := $(patsubst src/%.c,$(BUILD)/%.o,$(APP_SRCS)) $(BUILD)/app/stackcall.o
 APP_CFLAGS := -Iinclude -Wno-multichar -Wno-clobbered
 # libnix's libm: double maths through mathieeedoubbas.library, as the E code
 APP_LIBS := -lm
+ifdef DEBUG
+APP_CFLAGS += -DMI_DEBUG
+endif
 
 all: $(BUILD)/midiIn $(BUILD)/paula4_demo $(BUILD)/snd_demo
 
@@ -87,6 +93,10 @@ $(BUILD)/play14.o: $(AUDIO)/play14.s | $(BUILD)
 	$(VASM) -Fhunk -m68020 -quiet -o $@ $<
 
 $(BUILD)/hookentry.o: $(AUDIO)/hookentry.s | $(BUILD)
+	$(VASM) -Fhunk -m68000 -quiet -o $@ $<
+
+$(BUILD)/app/stackcall.o: src/app/stackcall.s | $(BUILD)
+	@mkdir -p $(dir $@)
 	$(VASM) -Fhunk -m68000 -quiet -o $@ $<
 
 $(BUILD)/paula4_demo.o: tests/paula4_demo.c $(AUDIO)/paula4.h | $(BUILD)

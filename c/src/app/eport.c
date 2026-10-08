@@ -7,6 +7,9 @@
 #include <exec/memory.h>
 #include <proto/exec.h>
 #include <proto/utility.h>
+#ifdef MI_DEBUG
+#include <proto/dos.h>
+#endif
 
 #include "eport.h"
 
@@ -14,10 +17,38 @@ struct e_frame *e_top;
 LONG exception;
 APTR exceptioninfo;
 
-void Throw(LONG code, APTR info)
+#ifdef MI_DEBUG
+void e_trace(CONST_STRPTR s)
+{
+	BPTR out = Output();
+	LONG n = 0;
+
+	if (!out)
+		return;
+	while (s[n])
+		n++;
+	Write(out, (APTR)"midiIn: ", 8);
+	Write(out, (APTR)s, n);
+	Write(out, (APTR)"\n", 1);
+}
+#endif
+
+static void do_throw(LONG code, APTR info, APTR from)
+	__attribute__((noreturn));
+
+static void do_throw(LONG code, APTR info, APTR from)
 {
 	struct e_frame *f = e_top;
+#ifdef MI_DEBUG
+	char buf[96];
 
+	estringf((STRPTR)buf, sizeof(buf),
+	         (CONST_STRPTR)"exception 0x\\h[8] info 0x\\h[8] from 0x\\h[8] (Raise at 0x\\h[8])",
+	         code, (LONG)info, (LONG)from, (LONG)Raise);
+	e_trace((CONST_STRPTR)buf);
+#else
+	(void)from;
+#endif
 	exception = code;
 	exceptioninfo = info;
 	if (!f)
@@ -25,9 +56,14 @@ void Throw(LONG code, APTR info)
 	longjmp(f->jb, 1);
 }
 
+void Throw(LONG code, APTR info)
+{
+	do_throw(code, info, __builtin_return_address(0));
+}
+
 void Raise(LONG code)
 {
-	Throw(code, exceptioninfo);
+	do_throw(code, exceptioninfo, __builtin_return_address(0));
 }
 
 void ReThrow(void)
