@@ -74,6 +74,8 @@ static ULONG player_func(struct Hook *h, struct AHIAudioCtrl *ctrl, APTR msg)
 /* ------------------------------------------------------------ init / end */
 
 static void ahi_end(void);
+static BOOL ahi_audio_on(void);
+static void free_audio(BOOL settle);
 
 static BOOL ahi_init(UWORD max_samples)
 {
@@ -107,6 +109,12 @@ static BOOL ahi_init(UWORD max_samples)
 	A.soundhook.h_SubEntry = (APTR)sound_func;
 	A.playerhook.h_Entry = (APTR)snd_hook_entry;
 	A.playerhook.h_SubEntry = (APTR)player_func;
+
+	/* ahi.device can be installed without a working audio mode; only count
+	 * AHI as usable once it has actually played */
+	if (!ahi_audio_on())
+		goto fail;
+	free_audio(FALSE);
 	return TRUE;
 
 fail:
@@ -210,29 +218,48 @@ static BOOL ahi_audio_on(void)
 
 	snd_scopelen = BUFFRAMES;
 	play_tags[5].ti_Data = A.swap;
+	A.cntmix = 0;
 	AHI_PlayA(A.ctrl, play_tags);
+
+	/* the sound hook must start firing, otherwise the mode is not working
+	 * (missing driver, no hardware); wait up to half a second */
+	{
+		WORD wait;
+
+		for (wait = 0; wait < 25 && A.cntmix < 2; wait++)
+			Delay(1);
+		if (A.cntmix < 2)
+			goto fail;
+	}
 	return TRUE;
 
 fail:
-	ahi_audio_off();
+	free_audio(FALSE);
 	return FALSE;
 }
 
-/* Lets two more buffers be mixed before freeing, so channels stopped just
- * before are silent in what AHI still plays; gives up after a second. */
-static void ahi_audio_off(void)
+/* settle: let two more buffers be mixed before freeing, so channels stopped
+ * just before are silent in what AHI still plays; gives up after a second */
+static void free_audio(BOOL settle)
 {
 	struct AHIAudioCtrl *c = A.ctrl;
 	WORD wait;
 
 	if (c) {
-		A.cntmix = 0;
-		for (wait = 0; wait < 50 && A.cntmix < 2; wait++)
-			Delay(1);
+		if (settle) {
+			A.cntmix = 0;
+			for (wait = 0; wait < 50 && A.cntmix < 2; wait++)
+				Delay(1);
+		}
 		A.ctrl = 0;
 		AHI_FreeAudio(c);
 	}
 	snd_scopedata = 0;
+}
+
+static void ahi_audio_off(void)
+{
+	free_audio(TRUE);
 }
 
 static BOOL ahi_is_on(void)

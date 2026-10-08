@@ -15,6 +15,7 @@
  *      chord across the stereo field, fading out over 2 s
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <exec/types.h>
 #include <exec/memory.h>
@@ -29,6 +30,18 @@ static const ULONG chord_hz[4] = { 440, 554, 659, 880 };
 static const ULONG pans[4] = { 0, 65536, 16384, 49152 };
 static const ULONG wide_hz[8] = { 131, 196, 262, 330, 392, 494, 587, 740 };
 
+static WORD *tri;
+
+/* also runs when the program is stopped with Ctrl-C */
+static void cleanup(void)
+{
+	snd_end();
+	if (tri) {
+		FreeVec(tri);
+		tri = 0;
+	}
+}
+
 static void say_free(const char *what)
 {
 	printf("%s: free channels = 0x%08lX\n", what,
@@ -39,7 +52,6 @@ int main(int argc, char **argv)
 {
 	enum snd_engine engine = SND_AUTO;
 	struct snd_envelope pad = { 3, 5, 160 };
-	WORD *tri;
 	ULONG id;
 	UWORD i;
 
@@ -50,6 +62,7 @@ int main(int argc, char **argv)
 			engine = SND_PAULA4;
 	}
 
+	atexit(cleanup);
 	tri = (WORD *)AllocVec(CYCLE * 2, MEMF_PUBLIC | MEMF_CLEAR);
 	if (!tri) {
 		printf("out of memory\n");
@@ -61,7 +74,7 @@ int main(int argc, char **argv)
 	}
 
 	if (!snd_init(engine, 8)) {
-		printf("no usable audio engine (AHI needs a 68020 and ahi.device)\n");
+		printf("no usable audio engine (AHI needs a 68020 and a working AHI audio mode)\n");
 		goto done;
 	}
 	printf("engine: %s, %u channels\n", snd_engine_name(), (unsigned)snd_voices());
@@ -111,7 +124,6 @@ int main(int argc, char **argv)
 	say_free("end");
 
 done:
-	snd_end();
-	FreeVec(tri);
+	cleanup();
 	return 0;
 }
