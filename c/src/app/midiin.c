@@ -22,6 +22,7 @@
  *   on a 68020+, else Paula 4 channel), AHI, PAULA14 or PAULA. The
  *   arguments are read before the sound engine is set up.
  * - midiIn runs on a 32 KB stack of its own if it was started with less.
+ * - The output window of a Workbench start (DEBUG trace) closes with midiIn.
  * - The variables used in the cleanup are file statics, so they keep
  *   their values when an exception jumps out of the main loop.
  */
@@ -95,6 +96,10 @@ __typeof__(LayersBase) LayersBase;
 struct MidiBase *MidiBase;
 
 extern struct WBStartup *_WBenchMsg;    /* libnix */
+/* libnix's console for a Workbench start: only opened when something is
+ * written (the DEBUG trace), closed when midiIn ends (libnix's default
+ * also has /WAIT, which keeps it open until closed by hand) */
+const char *__stdiowin = "CON:////midiIn/AUTO/CLOSE";
 
 static ULONG dummy;
 static char pubscreenname[121];
