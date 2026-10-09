@@ -19,7 +19,9 @@
  * - A file that is not a project ('oiff') gets its own message (English,
  *   not in the catalog) instead of "Not an Interchange File Format".
  * - 'SREF' (sample refused by the sound engine) is new, English only.
- * - The version string is a C constant with the contents of version.bin.
+ * - The version is in version.h (32.2026a); the $VER string and the screen
+ *   title carry only name, version and date, and the title adds the sound
+ *   engine in use (the E title was version.bin, with the copyright).
  */
 #include <exec/types.h>
 #include <exec/memory.h>
@@ -36,6 +38,8 @@
 #include "../gui/egui.h"
 #include "../gui/progressbar.h"
 #include "../gui/aboutpic.h"
+#include "../audio/snd.h"
+#include "version.h"
 
 char cxhotkey[60];                      /* hotkey text to display */
 
@@ -47,10 +51,8 @@ static EG_Obj *statgd_stat;             /* status text gadget */
 static CONST_STRPTR lasttxt;            /* last text for statgd_stat */
 static LONG winblocked;                 /* count of blockallwindows() */
 
-#ifndef MIDIIN_VERSTAG
-#define MIDIIN_VERSTAG "$VER:midiIn 32.020b (14-May-99) (c) by Najakotiva Software 1997-99"
-#endif
-static const char versionstr[] = MIDIIN_VERSTAG;
+static const char versionstr[] __attribute__((used)) =
+	"$VER: midiIn " MIDIIN_VERSION " (" MIDIIN_DATE ")";
 
 static LONG doreq(CONST_STRPTR text, CONST_STRPTR gadget, CONST_STRPTR title)
 {
@@ -370,9 +372,14 @@ void reqsumm(CONST_STRPTR n, LONG a, LONG b, LONG c, LONG d, LONG t, LONG usl)
 	doreq((CONST_STRPTR)s, (CONST_STRPTR)"OK", LOC(STRID_PROJECTSUMMARY));
 }
 
+/* the screen title: version, date and the sound engine in use */
 STRPTR string_info(void)
 {
-	return (STRPTR)versionstr + 5;
+	static char title[80];
+
+	estringf((STRPTR)title, sizeof(title), (CONST_STRPTR)"midiIn \\s (\\s) - \\s",
+	         (LONG)MIDIIN_VERSION, (LONG)MIDIIN_DATE, (LONG)snd_engine_name());
+	return (STRPTR)title;
 }
 
 /* ------------------------------------------------------- status window */
