@@ -26,6 +26,8 @@
  *   unconditionally, wrong after a failed open_scopewindow).
  * - The unused meter arrow code (commented out in the E file) is not
  *   ported.
+ * - snd_scope_update() is called before each frame is drawn, so engines
+ *   without a mixed buffer (Paula 4 channel) can fill one.
  */
 #include <exec/types.h>
 #include <exec/execbase.h>
@@ -209,6 +211,7 @@ static void subtaskscopes(void)
 		WaitTOF();
 		if (!AttemptSemaphore(&scoperpsem))
 			continue;
+		snd_scope_update();
 		sdata = snd_scopedata;
 		p = sdata ? *(const WORD **)sdata : NULL;
 		if (p) {

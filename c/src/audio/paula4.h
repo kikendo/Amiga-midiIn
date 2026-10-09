@@ -14,7 +14,8 @@
  *
  * Limits of this first version, all deliberate:
  *   - no backward playback (a negative frequency is played forwards)
- *   - no stereo or 16-bit samples
+ *   - no stereo or 16-bit playback: paula4_load16() converts 16-bit data
+ *     to 8 bits and mixes stereo down to mono
  *   - samples longer than one DMA run (PAULA4_MAX_BYTES) are refused
  *   - loop start and play offset are rounded down to an even byte
  */
@@ -47,9 +48,10 @@ BOOL paula4_is_on(void);
  * stay valid until paula4_unload(); otherwise a private copy is made.
  */
 ULONG paula4_load(const BYTE *data, ULONG frames);
-/* same, from 16-bit mono data: the high byte of each frame is kept, always
- * into a private Chip RAM copy */
-ULONG paula4_load16(const WORD *data, ULONG frames);
+/* same, from 16-bit data: the high byte of each frame is kept, always into
+ * a private Chip RAM copy; stereo data (interleaved left, right) is mixed
+ * down to mono */
+ULONG paula4_load16(const WORD *data, ULONG frames, BOOL stereo);
 void  paula4_unload(ULONG id);          /* stops any voice playing it */
 
 /*
@@ -66,6 +68,17 @@ void paula4_set_freq(UWORD voice, LONG freq);
 
 /* bit n set: voice n is idle (and was asked for in mask) */
 ULONG paula4_free_voices(ULONG mask);
+
+/*
+ * For the scopes: fills buf with frames (at most PAULA4_SCOPELEN) stereo
+ * 16-bit frames, left (voices 0, 3) then right (1, 2), drawn from the sample
+ * data at each voice's estimated play position as if mixed at
+ * PAULA4_SCOPERATE Hz. Paula's real position cannot be read, so this is
+ * accurate to about one 50 Hz tick.
+ */
+#define PAULA4_SCOPELEN  128
+#define PAULA4_SCOPERATE 22050UL
+void paula4_scope(WORD *buf, UWORD frames);
 
 /*
  * Called at 50 Hz from the vertical blank interrupt (also on NTSC), after the

@@ -12,6 +12,10 @@
  * tick counts the frames the voice has played at its current rate and frees
  * the voice one tick after the sample must have ended, so a new note can
  * never cut the tail off.
+ *
+ * The scopes: Paula's play position cannot be read back, so the tick also
+ * moves an estimated position, and paula4_scope() draws each voice from
+ * the sample data there, as if it were mixed at PAULA4_SCOPERATE.
  */
 #include <exec/types.h>
 #include <exec/memory.h>
@@ -48,6 +52,10 @@ struct p4voice {
 	BOOL             looped;
 	volatile LONG    left;       /* frames still to play, one-shots */
 	ULONG            ticklen;    /* frames played per tick */
+	volatile ULONG   pos;        /* estimated play position, frames */
+	ULONG            loopstart;
+	ULONG            rate;       /* frames per second */
+	UWORD            vol;        /* 0..64 */
 };
 
 static struct {
@@ -128,6 +136,17 @@ static void p4_tick(void)
 	for (i = 0; i < PAULA4_VOICES; i++) {
 		struct p4voice *v = &P.v[i];
 
+		if (v->busy) {
+			ULONG p = v->pos + v->ticklen, n = v->sample->frames;
+
+			if (p >= n) {
+				if (v->looped && n > v->loopstart)
+					p = v->loopstart + (p - n) % (n - v->loopstart);
+				else
+					p = n;
+			}
+			v->pos = p;
+		}
 		if (v->busy && !v->looped) {
 			v->left -= (LONG)v->ticklen;
 			/* one extra tick of margin, see the file comment */
@@ -336,7 +355,7 @@ ULONG paula4_load(const BYTE *data, ULONG frames)
 	return (ULONG)i + 1;
 }
 
-ULONG paula4_load16(const WORD *data, ULONG frames)
+ULONG paula4_load16(const WORD *data, ULONG frames, BOOL stereo)
 {
 	struct p4sample *s = 0;
 	BYTE *chip;
@@ -358,8 +377,14 @@ ULONG paula4_load16(const WORD *data, ULONG frames)
 	chip = (BYTE *)AllocMem(bytes, MEMF_CHIP | MEMF_CLEAR);
 	if (!chip)
 		return 0;
-	for (n = 0; n < frames; n++)
-		chip[n] = (BYTE)(data[n] >> 8);
+	if (stereo) {
+		/* interleaved left, right: mixed down to mono */
+		for (n = 0; n < frames; n++, data += 2)
+			chip[n] = (BYTE)(((LONG)data[0] + data[1]) >> 9);
+	} else {
+		for (n = 0; n < frames; n++)
+			chip[n] = (BYTE)(data[n] >> 8);
+	}
 	s->data = chip;
 	s->owned = TRUE;
 	s->frames = frames;
@@ -422,6 +447,12 @@ void paula4_play(UWORD voice, ULONG id, LONG offset, LONG freq,
 	v->looped = looped;
 	v->left = (LONG)(s->frames - start);
 	v->ticklen = period_to_ticklen(period);
+	v->pos = start;
+	v->loopstart = looped ? ((ULONG)loop & ~1UL) : 0;
+	if (v->loopstart >= s->frames)
+		v->loopstart = 0;
+	v->rate = P.clock / period;
+	v->vol = volume64(volume);
 	ch->ac_ptr = (UWORD *)(s->data + start);
 	ch->ac_len = (UWORD)((s->bytes - start) >> 1);
 	ch->ac_per = period;
@@ -470,7 +501,8 @@ void paula4_set_volume(UWORD voice, ULONG volume)
 {
 	if (!P.on || voice >= PAULA4_VOICES)
 		return;
-	CUSTOM->aud[voice].ac_vol = volume64(volume);
+	P.v[voice].vol = volume64(volume);
+	CUSTOM->aud[voice].ac_vol = P.v[voice].vol;
 }
 
 void paula4_set_freq(UWORD voice, LONG freq)
@@ -482,6 +514,7 @@ void paula4_set_freq(UWORD voice, LONG freq)
 	period = freq_to_period(freq);
 	Disable();
 	P.v[voice].ticklen = period_to_ticklen(period);
+	P.v[voice].rate = P.clock / period;
 	CUSTOM->aud[voice].ac_per = period;
 	Enable();
 }
@@ -501,4 +534,49 @@ ULONG paula4_free_voices(ULONG mask)
 void paula4_set_tick(void (*fn)(void))
 {
 	P.tick_cb = fn;
+}
+
+/* ----------------------------------------------------------------- scopes */
+
+void paula4_scope(WORD *buf, UWORD frames)
+{
+	LONG mix[2 * PAULA4_SCOPELEN];
+	UWORD i, n;
+
+	if (frames > PAULA4_SCOPELEN)
+		frames = PAULA4_SCOPELEN;
+	for (n = 0; n < 2 * frames; n++)
+		mix[n] = 0;
+	if (P.on) {
+		for (i = 0; i < PAULA4_VOICES; i++) {
+			struct p4voice *v = &P.v[i];
+			struct p4sample *s = v->sample;
+			LONG *m = mix + ((i == 0 || i == 3) ? 0 : 1);  /* left, right */
+			ULONG pos, step, frac = 0, end, lstart;
+			WORD vol;
+			BOOL looped;
+
+			if (!v->busy || !s || !s->data)
+				continue;
+			pos = v->pos;
+			end = s->frames;
+			looped = v->looped;
+			lstart = v->loopstart;
+			vol = (WORD)(v->vol * 4);       /* byte << 8 * vol / 64 */
+			step = (v->rate << 8) / PAULA4_SCOPERATE;     /* 8.8 */
+			for (n = 0; n < frames && pos < end; n++, m += 2) {
+				*m += (LONG)(s->data[pos] * vol);
+				frac += step;
+				pos += frac >> 8;
+				frac &= 0xFF;
+				if (pos >= end && looped && end > lstart)
+					pos = lstart + (pos - end) % (end - lstart);
+			}
+		}
+	}
+	for (n = 0; n < 2 * frames; n++) {
+		LONG x = mix[n];
+
+		buf[n] = (WORD)(x > 32767 ? 32767 : x < -32768 ? -32768 : x);
+	}
 }

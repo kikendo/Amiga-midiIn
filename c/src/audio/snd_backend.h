@@ -39,6 +39,10 @@ struct snd_backend {
 	/* engine options, NULL if the engine has none */
 	void  (*set_audioid)(ULONG id);
 	void  (*set_mixfreq)(ULONG freq);
+
+	/* refreshes the snd_scopedata buffer before it is read; NULL if the
+	 * engine keeps it up to date itself */
+	void  (*scope_update)(void);
 };
 
 extern const struct snd_backend snd_backend_ahi;

@@ -41,5 +41,6 @@ const struct snd_backend snd_backend_paula14 = {
 	paula14_free_voices,
 	paula14_set_tick,
 	0,
-	paula14_set_mixfreq
+	paula14_set_mixfreq,
+	0
 };

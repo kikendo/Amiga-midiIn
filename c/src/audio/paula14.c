@@ -11,7 +11,8 @@
  * vector is put back on audio off; audio off waits for a mix in progress
  * to finish before freeing its buffers; the Paula clock is taken from the
  * machine (PAL or NTSC) instead of always PAL; volume envelopes are done by
- * snd.c, so the mixer's own envelope is kept at a constant 100%.
+ * snd.c, so the mixer's own envelope is kept at a constant 100%; the Chip
+ * RAM output buffers are double buffered (see play14.s).
  */
 #include <exec/types.h>
 #include <exec/memory.h>
@@ -70,7 +71,8 @@ struct p14_data {
 	WORD *buffercopy;
 	WORD *bufferswap;
 	BYTE *calibration;              /* middle of the table */
-	BYTE *chip[4];                  /* +4 */
+	BYTE *chip[4];                  /* set queued last (Paula playing it) */
+	BYTE *chipalt[4];               /* the other set */
 };
 
 typedef char p14_channel_size_check[sizeof(struct p14_channel) == 56 ? 1 : -1];
@@ -107,7 +109,7 @@ static struct {
 	struct p14_channel *chans;
 	struct Interrupt  *mint;
 	struct Interrupt  *sint;
-	BYTE              *chipbuf[4];
+	BYTE              *chipbuf[8];  /* two sets of four */
 	LONG              *work;
 	struct Interrupt  *oldvec;
 	BOOL               vector_set;
@@ -262,7 +264,7 @@ static void free_buffers(void)
 {
 	UWORD i;
 
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < 8; i++) {
 		if (P.chipbuf[i]) {
 			FreeMem(P.chipbuf[i], BUFFLEN);
 			P.chipbuf[i] = 0;
@@ -317,11 +319,13 @@ BOOL paula14_audio_on(void)
 	P.mint = (struct Interrupt *)AllocVec(sizeof(struct Interrupt), MEMF_PUBLIC | MEMF_CLEAR);
 	P.sint = (struct Interrupt *)AllocVec(sizeof(struct Interrupt), MEMF_PUBLIC | MEMF_CLEAR);
 	P.work = (LONG *)AllocVec(16 * BUFFLEN, MEMF_PUBLIC | MEMF_CLEAR);
-	for (i = 0; i < 4; i++)
+	for (i = 0; i < 8; i++)
 		P.chipbuf[i] = (BYTE *)AllocMem(BUFFLEN, MEMF_CHIP | MEMF_CLEAR);
-	if (!P.dm || !P.chans || !P.mint || !P.sint || !P.work
-	    || !P.chipbuf[0] || !P.chipbuf[1] || !P.chipbuf[2] || !P.chipbuf[3])
+	if (!P.dm || !P.chans || !P.mint || !P.sint || !P.work)
 		goto fail;
+	for (i = 0; i < 8; i++)
+		if (!P.chipbuf[i])
+			goto fail;
 	if (!claim_audio())
 		goto fail;
 
@@ -341,8 +345,10 @@ BOOL paula14_audio_on(void)
 	dm->buffercopy = (WORD *)((BYTE *)P.work + 8 * BUFFLEN);
 	dm->bufferswap = (WORD *)((BYTE *)P.work + 12 * BUFFLEN);
 	dm->calibration = (BYTE *)calibration + 128;
-	for (i = 0; i < 4; i++)
-		dm->chip[i] = P.chipbuf[i] + 4;
+	for (i = 0; i < 4; i++) {
+		dm->chip[i] = P.chipbuf[i];
+		dm->chipalt[i] = P.chipbuf[i + 4];
+	}
 	dm->softint = P.sint;
 
 	c->intena = INTF_AUD0 | INTF_AUD1 | INTF_AUD2 | INTF_AUD3;

@@ -3,6 +3,8 @@
  *
  * Rate maths uses C doubles where the E code called mathieeedoubbas.library.
  * The sound engine is chosen with the AUDIO argument / tooltype (new).
+ * A sample the engine cannot take raises 'SREF' (the E code dropped it
+ * without a message).
  */
 #include <exec/types.h>
 #include <exec/memory.h>
@@ -169,8 +171,10 @@ void sfx_load(struct sfx *s)
 		s->maxvolume = (WORD)getmaxvolume(s->start, s->length);
 		s->id = snd_setsample(s->start, (ULONG)sfx_frames(s), s->type ? TRUE : FALSE);
 		if (s->id == 0) {
+			/* the engine refused it: say so (the E code stayed silent) */
 			sfx_end(s);
 			cnst = 0;
+			Throw('SREF', (APTR)snd_engine_name());
 		}
 	} E_EXCEPT_DO {
 		s->loadcnest = cnst;

@@ -68,5 +68,7 @@ ULONG snd_freechannels(ULONG mask);
  * last mixed buffer of snd_scopelen stereo 16-bit frames. */
 extern volatile APTR snd_scopedata;
 extern ULONG snd_scopelen;
+/* call before reading the buffer (some engines fill it on demand) */
+void snd_scope_update(void);
 
 #endif /* SND_H */

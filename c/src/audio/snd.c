@@ -133,6 +133,14 @@ void snd_end(void)
 	snd_scopedata = 0;
 }
 
+void snd_scope_update(void)
+{
+	const struct snd_backend *b = B;
+
+	if (b && b->scope_update)
+		b->scope_update();
+}
+
 const char *snd_engine_name(void)
 {
 	return B ? B->name : "none";

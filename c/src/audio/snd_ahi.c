@@ -350,5 +350,6 @@ const struct snd_backend snd_backend_ahi = {
 	ahi_free_mask,
 	ahi_set_tick,
 	ahi_set_audioid,
-	ahi_set_mixfreq
+	ahi_set_mixfreq,
+	0
 };

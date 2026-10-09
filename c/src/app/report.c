@@ -18,6 +18,7 @@
  *   clean_about only forgets the pointers.
  * - A file that is not a project ('oiff') gets its own message (English,
  *   not in the catalog) instead of "Not an Interchange File Format".
+ * - 'SREF' (sample refused by the sound engine) is new, English only.
  * - The version string is a C constant with the contents of version.bin.
  */
 #include <exec/types.h>
@@ -245,6 +246,12 @@ void report_exception(void)
 		case 'READ': estrcpy((STRPTR)s, LOC(STRID_READERROR), size); break;
 		case 'NSND': estrcpy((STRPTR)s, LOC(STRID_NOSSNDERROR), size); break;
 		case 'NBDY': estrcpy((STRPTR)s, LOC(STRID_NOBODYERROR), size); break;
+		case 'SREF':
+			/* no catalog string */
+			estringf((STRPTR)s, size,
+			         (CONST_STRPTR)"Sound engine \\s can't play\nthis sample: too long or no memory!",
+			         (LONG)exceptioninfo);
+			break;
 		case 'FIBO':
 			estrcpy((STRPTR)s, (CONST_STRPTR)"Fibonacci-delta compression not supported!", size);
 			break;

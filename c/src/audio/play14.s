@@ -1,16 +1,24 @@
 ; play14.s - 14-bit Paula output and its 32 voice mixer, 68020+
 ;
 ; The interrupt and mixing code of src/play14unlim.e (midiIn, Rafal
-; Michalski), converted to vasm Motorola syntax. The code is unchanged
-; except that the four hand-encoded 68020 instructions are written as
-; mnemonics (same encoding) and the E constants are spelled out below.
+; Michalski), converted to vasm Motorola syntax. The four hand-encoded
+; 68020 instructions are written as mnemonics (same encoding) and the E
+; constants are spelled out below.
 ;
 ; Output: channels 0 and 3 play the left side, 1 and 2 the right; on each
 ; side one channel at volume 64 plays the high byte and one at volume 1 the
 ; low bits, corrected by a 256 byte calibration table. Every AUD1 interrupt
-; (one per BUFFLEN output frames) converts the last mixed buffer into the
-; four Chip RAM buffers and Causes a software interrupt that mixes the
-; next one.
+; (one per BUFFLEN output frames) converts the last mixed buffer into four
+; Chip RAM buffers and Causes a software interrupt that mixes the next one.
+;
+; Change from the E code: the Chip RAM buffers are double buffered. The E
+; code converted into the buffers Paula had just started to play, racing
+; the DMA with a 4 frame head start, and put the last 4 frames of each
+; buffer in place later from the mixer. Any interrupt delay over those 4
+; frames (serial MIDI input, Disable(), an emulator) made it crackle. Now
+; each interrupt points Paula at the other set of buffers (used when the
+; current ones end) and converts all BUFFLEN frames into that set, which
+; gives a whole buffer of slack, for one buffer more latency.
 ;
 ; Not called from C: p14_intplay is installed with SetIntVector(INTB_AUD1)
 ; and p14_mixchannels as the code of a software interrupt, both with the
@@ -36,7 +44,12 @@ DM_BUFFERWORK = 16
 DM_BUFFERCOPY = 20
 DM_BUFFERSWAP = 24
 DM_CALIBRATION= 28      ; middle of the 256 byte table
-DM_CHIPADR    = 32      ; four Chip RAM buffers (+4)
+DM_CHIPADR    = 32      ; four Chip RAM buffers: the set queued last
+DM_CHIPALT    = 48      ; the other set
+AUD0LC        = $A0
+AUD1LC        = $B0
+AUD2LC        = $C0
+AUD3LC        = $D0
 
 ; struct p14_envelope, fixed point 1.0 = $01000000
 EVALT         = 0
@@ -62,9 +75,20 @@ CH_SIZEOF     = 56
 _p14_intplay:
 				MOVE.W  #INTF_AUD1,INTREQ(A0)
 				MOVEM.L D2-D7/A2-A4/A6,-(A7)
+				; Paula has just started the set queued last time (in
+				; DM_CHIPADR). Swap the sets, queue the other one and
+				; convert into it.
+				MOVEM.L DM_CHIPADR(A1),D0-D3   ; playing now
+				MOVEM.L DM_CHIPALT(A1),A2-A5   ; to fill and queue
+				MOVEM.L A2-A5,DM_CHIPADR(A1)
+				MOVEM.L D0-D3,DM_CHIPALT(A1)
+				MOVE.L  A2,AUD3LC(A0)          ; lo left
+				MOVE.L  A3,AUD0LC(A0)          ; hi left
+				MOVE.L  A4,AUD2LC(A0)          ; lo right
+				MOVE.L  A5,AUD1LC(A0)          ; hi right
 				MOVE.L  DM_BUFFERSWAP(A1),A0
 				MOVEM.L DM_CALIBRATION(A1),A2-A6
-				MOVE.W  #BUFFLEN/4-2,D7
+				MOVE.W  #BUFFLEN/4-1,D7
 				MOVEQ   #$40,D5
 				MOVEQ   #1,D0
 				MOVEQ   #0,D4
@@ -254,36 +278,6 @@ ipendofint:
 				MOVE.L  DM_BUFFERSWAP(A1),A0
 				MOVE.L  DM_BUFFERCOPY(A1),DM_BUFFERSWAP(A1)
 				MOVE.L  A0,DM_BUFFERCOPY(A1)
-				LEA     BUFFLEN*4-16(A0),A0
-				MOVEM.L  DM_CALIBRATION(A1),A2-A6
-				MOVEQ   #$40,D5
-				MOVEQ   #1,D0
-				MOVEQ   #0,D4
-ipcalibrloop2:
-				MOVE.B  D0,D4
-				LSL.L   #8,D1
-				MOVE.L  (A0)+,D0
-				MOVE.B  D0,D1
-				LSR.B   #2,D1
-				ASR.W   #8,D0
-				LSL.L   #8,D2
-				SUB.B   D5,D1
-				ADD.B   0(A2,D0.W),D1
-				MOVE.B  D0,D2
-				SWAP    D0
-				LSL.L   #8,D3
-				MOVE.B  D0,D3
-				LSR.B   #2,D3
-				ASR.W   #8,D0
-				SUB.B   D5,D3
-				ADD.B   0(A2,D0.W),D3
-				LSL.L   #8,D4
-				BCC.S   ipcalibrloop2
-				MOVE.L  D1,-(A5)  ;LO RIGHT
-				MOVE.L  D2,-(A6)  ;HI RIGHT
-				MOVE.B  D0,D4
-				MOVE.L  D4,-(A4)  ;HI LEFT
-				MOVE.L  D3,-(A3)  ;LO LEFT
 				MOVEM.L (A7)+,D2-D7/A2-A4/A6
 				MOVEQ   #0,D0
 				MOVE.L  D0,DM_BUSY(A1)
