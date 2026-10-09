@@ -3,8 +3,14 @@
  * loadsvxbody.e, loadwavedata.e and notecalc.e
  *
  * Kept as in the E code, including how WAVE frames are counted from the
- * block alignment. Sample memory is taken from any memory instead of Fast
- * RAM only, so loading also works on machines without Fast RAM.
+ * block alignment. Differences:
+ * - Sample memory is taken from any memory instead of Fast RAM only, so
+ *   loading also works on machines without Fast RAM.
+ * - An 8SVX BODY that is shorter in the file than its chunk header says is
+ *   loaded as far as it goes (the E code failed with 'READ').
+ * - Files without a known header are loaded as RAW: 8-bit signed mono at
+ *   8287 Hz (ProTracker's C-2 on PAL). An AIFF, 8SVX or WAVE file whose
+ *   header cannot be read is loaded as RAW too (the E code refused both).
  */
 #include <string.h>
 #include <exec/types.h>
@@ -19,6 +25,7 @@
 #include "tables.h"
 
 #define SAMPLE_MEM MEMF_PUBLIC
+#define RAW_RATE 8287
 
 static ULONG be32(const UBYTE *p)
 {
@@ -38,6 +45,18 @@ static ULONG le32(const UBYTE *p)
 static UWORD le16(const UBYTE *p)
 {
 	return (UWORD)((p[1] << 8) | p[0]);
+}
+
+/* bytes from the current position to the end of the file (position kept) */
+static LONG bytesleft(BPTR fh)
+{
+	LONG curr, end;
+
+	if ((curr = Seek(fh, 0, OFFSET_END)) == -1)
+		Raise('READ');
+	if ((end = Seek(fh, curr, OFFSET_BEGINNING)) == -1)
+		Raise('READ');
+	return end - curr;
 }
 
 /* ------------------------------------------------------- simpleiffparse.e */
@@ -361,6 +380,21 @@ static BOOL load8svx(BPTR fh, struct sampleinfo *si)
 		if (bits > 8)
 			k = k / 2;
 	}
+	{
+		/* a BODY cut short in the file: load what is there */
+		LONG avail = bytesleft(fh), z = bits > 8 ? 2 : 1, max;
+
+		if (chn > 1)
+			max = (E_MIN(avail - l / chn, l / chn)) / z;
+		else
+			max = E_MIN(avail, l) / z;
+		if (max < 1)
+			Raise('NBDY');
+		if (k > max)
+			k = max;
+		if (oneshot >= k)
+			repeat = 0;
+	}
 	chn = chn > 1 ? l / chn : 0;            /* offset of the second channel */
 	data = loadsvxBODY(fh, k, bits, chn, &bytes);
 	si->start = data;
@@ -499,6 +533,24 @@ static const struct filetype types[] = {
 	{ STRID_WAVENAME, 'WAVE', { { 0, "RIFF" }, { 8, "WAVE" } } },
 };
 
+/* RAW: the whole file as 8-bit signed mono */
+static BOOL loadraw(BPTR fh, struct sampleinfo *si)
+{
+	LONG frames, bytes;
+
+	if (Seek(fh, 0, OFFSET_BEGINNING) == -1)
+		Raise('READ');
+	if ((frames = bytesleft(fh)) < 2)
+		Raise('UNRE');
+	si->start = loadsvxBODY(fh, frames, 8, 0, &bytes);
+	si->loop = 0;
+	si->bytelength = bytes;
+	si->channels = 1;
+	si->frames = frames;
+	si->rate = RAW_RATE;
+	return TRUE;
+}
+
 BOOL loader_recon(CONST_STRPTR name, struct sampleinfo *si)
 {
 	BPTR fh;
@@ -524,7 +576,11 @@ BOOL loader_recon(CONST_STRPTR name, struct sampleinfo *si)
 		}
 	}
 	Close(fh);
-	return status;
+	if (!status && si) {
+		si->descr = (STRPTR)"RAW";
+		si->type = 'RAW ';
+	}
+	return TRUE;
 }
 
 BOOL loader_get(CONST_STRPTR name, struct sampleinfo *si)
@@ -546,12 +602,22 @@ BOOL loader_get(CONST_STRPTR name, struct sampleinfo *si)
 			status = loadwave(fh, si);
 			break;
 		default:
-			status = FALSE;
+			status = loadraw(fh, si);
 		}
-	} E_EXCEPT_DO {
-		Close(fh);
-		ReThrow();
+	} E_EXCEPT {
+		/* a header that cannot be read: try the file as RAW */
+		if (exception != 'MEM' && si->type != 'RAW ') {
+			E_TRY {
+				si->descr = (STRPTR)"RAW";
+				si->type = 'RAW ';
+				status = loadraw(fh, si);
+			} E_EXCEPT_DO {
+			} E_END;
+		}
 	} E_END;
+	Close(fh);
+	if (exception)
+		ReThrow();
 	return status;
 }
 
